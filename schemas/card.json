@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "card.json",
+  "type": "object",
+  "required": [
+    "rank",
+    "suit"
+  ],
+  "properties": {
+    "rank": {
+      "type": "string",
+      "description": "2-10,J,Q,K,A or special: MAHJONG,PHOENIX,DRAGON,DOG"
+    },
+    "suit": {
+      "type": "string",
+      "description": "S,H,D,C or NONE for specials"
+    }
+  }
+}

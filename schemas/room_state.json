@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "room_state.json",
+  "type": "object",
+  "required": [
+    "roomId",
+    "roomCode",
+    "game",
+    "members",
+    "status",
+    "serverTimeMs"
+  ],
+  "properties": {
+    "roomId": {
+      "type": "string"
+    },
+    "roomCode": {
+      "type": "string"
+    },
+    "game": {
+      "type": "string"
+    },
+    "members": {
+      "type": "array"
+    },
+    "status": {
+      "type": "string"
+    },
+    "serverTimeMs": {
+      "type": "integer"
+    }
+  }
+}

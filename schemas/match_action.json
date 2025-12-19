@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "match_action.json",
+  "type": "object",
+  "required": [
+    "requestId",
+    "matchId",
+    "action"
+  ],
+  "properties": {
+    "requestId": {
+      "type": "string"
+    },
+    "matchId": {
+      "type": "string"
+    },
+    "action": {
+      "type": "object",
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "type": {
+          "type": "string"
+        },
+        "cards": {
+          "type": "array",
+          "items": {
+            "$ref": "card.json"
+          }
+        },
+        "value": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 6
+        },
+        "declaredCombo": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "toOpponentPlayerId": {
+          "type": "string"
+        },
+        "wishRank": {
+          "type": "string",
+          "description": "2-10,J,Q,K,A or NONE"
+        }
+      },
+      "additionalProperties": true
+    }
+  }
+}
