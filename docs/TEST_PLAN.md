@@ -28,6 +28,12 @@
   - 1명 남으면 종료 + 꼴찌 처리
   - 더블 승리 +200(선언 점수 포함)
 
+### Web-specific test cases
+- 브라우저 refresh 시 재접속(90초) 성공
+- 동일 계정 다중 탭 접속 방지
+- Pointer down/up 중복 이벤트 방어
+- 네트워크 throttle(DevTools)에서 상태 복구
+
 ## 통합 테스트
 - seed 고정 + action sequence 재생 → 결과 동일
 - 재접속: 트릭 도중 끊김/복귀 후 상태 동일(legalActions 포함)

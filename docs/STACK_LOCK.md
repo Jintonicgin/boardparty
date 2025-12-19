@@ -1,9 +1,16 @@
 # STACK_LOCK (확정 스택/정책 1장)
 
-## Client
+## Client (LOCKED)
 - Flutter (Dart)
-- iOS: Xcode 사용(Flutter iOS Runner)
+- Single codebase for Web / Android / iOS
+- Web: Flutter Web (Canvas-based rendering)
+- iOS: Xcode (Flutter iOS Runner)
 - Android: Android Studio
+
+## Cross-platform policy (LOCKED)
+- 모든 게임 로직은 서버에서 판정한다.
+- Web/App 클라이언트는 동일한 state/action 모델을 사용한다.
+- 플랫폼별 분기 로직은 입력/UI 처리로만 제한한다.
 
 ## Realtime
 - Socket.IO
