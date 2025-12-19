@@ -1,0 +1,76 @@
+####################################
+# Misc / OS
+####################################
+*~
+.DS_Store
+Thumbs.db
+*.swp
+*.log
+*.class
+*.pyc
+
+####################################
+# IDE / Editor
+####################################
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+
+####################################
+# Flutter / Dart
+####################################
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+build/
+coverage/
+
+# Flutter generated docs
+**/doc/api/
+
+####################################
+# Android
+####################################
+android/.gradle/
+android/local.properties
+android/**/GeneratedPluginRegistrant.java
+/android/app/debug
+/android/app/profile
+/android/app/release
+
+####################################
+# iOS
+####################################
+ios/Pods/
+ios/.symlinks/
+ios/Flutter/Flutter.framework
+ios/Flutter/App.framework
+ios/Flutter/Generated.xcconfig
+ios/Flutter/flutter_export_environment.sh
+**/ios/Flutter/.last_build_id
+
+####################################
+# macOS
+####################################
+macos/Flutter/ephemeral/
+
+####################################
+# Windows
+####################################
+windows/flutter/ephemeral/
+
+####################################
+# Linux
+####################################
+linux/flutter/ephemeral/
+
+####################################
+# Symbolication / Obfuscation
+####################################
+app.*.symbols
+app.*.map.json
