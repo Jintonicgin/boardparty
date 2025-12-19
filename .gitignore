@@ -56,17 +56,16 @@ ios/Flutter/flutter_export_environment.sh
 ####################################
 # macOS
 ####################################
-macos/Flutter/ephemeral/
+macos/
 
 ####################################
 # Windows
 ####################################
-windows/flutter/ephemeral/
-
+windows/
 ####################################
 # Linux
 ####################################
-linux/flutter/ephemeral/
+linux/
 
 ####################################
 # Symbolication / Obfuscation
