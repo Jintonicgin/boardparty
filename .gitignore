@@ -38,7 +38,6 @@ coverage/
 ####################################
 android/.gradle/
 android/local.properties
-android/**/GeneratedPluginRegistrant.java
 /android/app/debug
 /android/app/profile
 /android/app/release
