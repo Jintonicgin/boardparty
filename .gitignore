@@ -41,6 +41,8 @@ android/local.properties
 /android/app/debug
 /android/app/profile
 /android/app/release
+android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java
+
 
 ####################################
 # iOS
@@ -52,23 +54,26 @@ ios/Flutter/App.framework
 ios/Flutter/Generated.xcconfig
 ios/Flutter/flutter_export_environment.sh
 **/ios/Flutter/.last_build_id
+ios/Runner/GeneratedPluginRegistrant.*
 
 ####################################
 # macOS
 ####################################
-macos/
+macos/Flutter/GeneratedPluginRegistrant.swift
 
 ####################################
 # Windows
 ####################################
-windows/
+windows/flutter/generated_*
 ####################################
 # Linux
 ####################################
-linux/
+linux/flutter/generated_*
 
 ####################################
 # Symbolication / Obfuscation
 ####################################
 app.*.symbols
 app.*.map.json
+
+
