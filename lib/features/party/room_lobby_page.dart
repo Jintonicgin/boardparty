@@ -158,14 +158,19 @@ class _RoomLobbyPageState extends State<RoomLobbyPage> {
         children: [
           // 게임 룰
           Card(
-            child: Padding(
-              padding: const EdgeInsets.all(14),
-              child: Row(
-                children: const [
-                  Icon(Icons.info_outline),
-                  SizedBox(width: 10),
-                  Expanded(child: Text('게임 룰 보기 (TODO)')),
-                ],
+            child: InkWell(
+              onTap: _showGameRuleDialog,
+              borderRadius: BorderRadius.circular(14),
+              child: const Padding(
+                padding: EdgeInsets.all(14),
+                child: Row(
+                  children: [
+                    Icon(Icons.info_outline),
+                    SizedBox(width: 10),
+                    Expanded(child: Text('게임 룰 보기')),
+                    Icon(Icons.chevron_right),
+                  ],
+                ),
               ),
             ),
           ),
@@ -291,6 +296,169 @@ class _RoomLobbyPageState extends State<RoomLobbyPage> {
     final r = Random();
     return List.generate(5, (_) => chars[r.nextInt(chars.length)]).join();
   }
+
+  void _showGameRuleDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return Dialog(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 600, maxHeight: 700),
+            child: Column(
+              children: [
+                // 헤더
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        Theme.of(context).colorScheme.primary,
+                        Theme.of(context).colorScheme.primary.withValues(alpha: 0.7),
+                      ],
+                    ),
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(18),
+                      topRight: Radius.circular(18),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.casino, color: Colors.white, size: 28),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          '${widget.gameTitle} 게임 룰',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 20,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close, color: Colors.white),
+                        onPressed: () => Navigator.of(ctx).pop(),
+                      ),
+                    ],
+                  ),
+                ),
+                // 내용
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(20),
+                    child: _buildGameRuleContent(),
+                  ),
+                ),
+                // 하단 버튼
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      onPressed: () => Navigator.of(ctx).pop(),
+                      child: const Text('확인'),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildGameRuleContent() {
+    if (_isLasVegas) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: const [
+          _RuleCard(
+            icon: Icons.flag,
+            iconColor: Color(0xFF22C55E),
+            title: '목표',
+            content: '4라운드(또는 설정된 라운드) 동안 카지노에서 돈을 가장 많이 따는 플레이어가 승리합니다.',
+          ),
+          SizedBox(height: 16),
+          _RuleCard(
+            icon: Icons.settings,
+            iconColor: Color(0xFF3B82F6),
+            title: '준비 (라운드 시작)',
+            items: [
+              '카지노는 1~6번이 있습니다.',
+              '각 카지노에는 돈 카드(상금)를 공개로 놓습니다.',
+              '각 카지노의 공개된 상금 합이 최소 \$50,000 이상이 되도록 채웁니다.',
+              '각 플레이어는 자기 색 주사위 8개를 가집니다.',
+            ],
+          ),
+          SizedBox(height: 16),
+          _RuleCard(
+            icon: Icons.play_circle_outline,
+            iconColor: Color(0xFFF59E0B),
+            title: '진행',
+            content: '플레이는 주사위를 굴리고 → 한 숫자를 선택해 → 해당 카지노에 배치를 반복합니다.\n\n모든 주사위를 다 놓으면 라운드가 끝납니다.',
+            subsections: [
+              _RuleSubsection(
+                subtitle: '내 턴에 하는 일',
+                items: [
+                  '아직 손에 남아있는 내 주사위 전부를 굴립니다.',
+                  '나온 눈 (1~6) 중 하나를 선택합니다.',
+                  '선택한 눈과 같은 값이 나온 주사위를 전부 해당 번호 카지노에 한꺼번에 배치합니다.',
+                  '남은 주사위는 다음 턴에 다시 굴립니다.',
+                  '다음 플레이어로 턴이 넘어갑니다.',
+                ],
+              ),
+            ],
+          ),
+          SizedBox(height: 16),
+          _RuleCard(
+            icon: Icons.calculate,
+            iconColor: Color(0xFF8B5CF6),
+            title: '라운드 종료 정산',
+            content: '각 카지노 (1~6번) 마다 주사위 개수로 순위를 매겨 상금을 가져갑니다.',
+            subsections: [
+              _RuleSubsection(
+                subtitle: '핵심 규칙: 동점은 전부 무효',
+                isHighlight: true,
+                items: [
+                  '어떤 카지노에서 같은 개수로 묶인 플레이어들은 그 순위에서 모두 탈락합니다.',
+                  '보통 1등 동점이 가장 중요합니다.',
+                ],
+              ),
+              _RuleSubsection(
+                subtitle: '예시',
+                example: '3번 카지노에 A=4개, B=4개, C=2개라면\n\n• A와 B는 1등 동점 → 둘 다 무효\n• 남은 사람 중 C가 최다 → C가 1등으로 상금을 가져감',
+              ),
+              _RuleSubsection(
+                subtitle: '상금 배분',
+                items: [
+                  '각 카지노의 돈 카드는 보통 큰 금액부터 지급됩니다.',
+                  '1등이 가장 큰 카드, 2등이 다음 카드… 순으로 가져갑니다.',
+                ],
+              ),
+            ],
+          ),
+          SizedBox(height: 16),
+          _RuleCard(
+            icon: Icons.replay,
+            iconColor: Color(0xFF60A5FA),
+            title: '다음 라운드',
+            content: '모든 카지노 상금을 정산한 뒤, 다음 라운드에서 다시 각 카지노에 상금을 공개 배치하고 같은 방식으로 진행합니다.',
+          ),
+          SizedBox(height: 16),
+          _RuleCard(
+            icon: Icons.emoji_events,
+            iconColor: Color(0xFFFCD34D),
+            title: '게임 종료 & 승리',
+            content: '마지막 라운드까지 끝나면, 각자 딴 돈을 합산해서 총액이 가장 큰 플레이어가 승리합니다.',
+          ),
+        ],
+      );
+    }
+
+    // 다른 게임들은 준비 중
+    return const Text('게임 룰이 준비 중입니다.');
+  }
 }
 
 /* ====== Models ====== */
@@ -331,6 +499,216 @@ class _Seat {
 }
 
 /* ====== UI ====== */
+
+class _RuleCard extends StatelessWidget {
+  final IconData icon;
+  final Color iconColor;
+  final String title;
+  final String? content;
+  final List<String>? items;
+  final List<_RuleSubsection>? subsections;
+
+  const _RuleCard({
+    required this.icon,
+    required this.iconColor,
+    required this.title,
+    this.content,
+    this.items,
+    this.subsections,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0F1A2E),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFF22335A)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 헤더
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: iconColor.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, color: iconColor, size: 24),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w900,
+                    fontSize: 16,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          // 내용
+          if (content != null) ...[
+            Text(
+              content!,
+              style: const TextStyle(
+                height: 1.6,
+                fontSize: 14,
+                color: Color(0xFFE5E7EB),
+              ),
+            ),
+            if (items != null || subsections != null) const SizedBox(height: 8),
+          ],
+          if (items != null)
+            ...items!.map((item) => Padding(
+                  padding: const EdgeInsets.only(bottom: 6, left: 8),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        '• ',
+                        style: TextStyle(
+                          height: 1.6,
+                          fontSize: 14,
+                          color: Color(0xFF9CA3AF),
+                        ),
+                      ),
+                      Expanded(
+                        child: Text(
+                          item,
+                          style: const TextStyle(
+                            height: 1.6,
+                            fontSize: 14,
+                            color: Color(0xFFE5E7EB),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                )),
+          if (subsections != null)
+            ...subsections!.asMap().entries.map((entry) {
+              final index = entry.key;
+              final subsection = entry.value;
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (index > 0 || content != null || items != null)
+                    const SizedBox(height: 12),
+                  subsection,
+                ],
+              );
+            }),
+        ],
+      ),
+    );
+  }
+}
+
+class _RuleSubsection extends StatelessWidget {
+  final String subtitle;
+  final String? example;
+  final List<String>? items;
+  final bool isHighlight;
+
+  const _RuleSubsection({
+    required this.subtitle,
+    this.example,
+    this.items,
+    this.isHighlight = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: isHighlight
+          ? BoxDecoration(
+              color: const Color(0xFFEF4444).withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: const Color(0xFFEF4444).withValues(alpha: 0.3)),
+            )
+          : null,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              if (isHighlight)
+                const Icon(
+                  Icons.warning_amber_rounded,
+                  color: Color(0xFFEF4444),
+                  size: 18,
+                ),
+              if (isHighlight) const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  subtitle,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                    color: isHighlight ? const Color(0xFFEF4444) : const Color(0xFF93C5FD),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          if (example != null)
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: const Color(0xFF121E35),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                example!,
+                style: const TextStyle(
+                  height: 1.6,
+                  fontSize: 13,
+                  color: Color(0xFFE5E7EB),
+                  fontFamily: 'monospace',
+                ),
+              ),
+            ),
+          if (items != null)
+            ...items!.map((item) => Padding(
+                  padding: const EdgeInsets.only(bottom: 4, left: 4),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        '• ',
+                        style: TextStyle(
+                          height: 1.6,
+                          fontSize: 13,
+                          color: Color(0xFF9CA3AF),
+                        ),
+                      ),
+                      Expanded(
+                        child: Text(
+                          item,
+                          style: const TextStyle(
+                            height: 1.6,
+                            fontSize: 13,
+                            color: Color(0xFFE5E7EB),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                )),
+        ],
+      ),
+    );
+  }
+}
 
 class _SeatTile extends StatelessWidget {
   final int index;
