@@ -9,10 +9,14 @@ class LasVegasDiceSelectPage extends StatefulWidget {
   /// 봇 수(0이면 전부 사람). 솔로는 보통 playerCount-1
   final int botCount;
 
+  /// ✅ 판수(라운드 수)
+  final int rounds;
+
   const LasVegasDiceSelectPage({
     super.key,
     required this.playerCount,
     this.botCount = 0,
+    this.rounds = 4, // ✅ 기본 4판
   });
 
   @override
@@ -64,8 +68,6 @@ class _LasVegasDiceSelectPageState extends State<LasVegasDiceSelectPage> {
 
   bool get _allHumansSelected =>
       _seats.where((s) => s.kind == _SeatKind.human).every((s) => s.selected != null);
-
-  bool get _allSelected => _seats.every((s) => s.selected != null);
 
   bool _isColorTaken(_DiceColor c) => _seats.any((s) => s.selected == c);
 
@@ -162,29 +164,30 @@ class _LasVegasDiceSelectPageState extends State<LasVegasDiceSelectPage> {
   }
 
   void _goNext() {
-  final done = _seats.every((s) => s.selected != null);
-  if (!done) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('사람이 먼저 모두 선택해야 합니다.')),
-    );
-    return;
-  }
+    final done = _seats.every((s) => s.selected != null);
+    if (!done) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('사람이 먼저 모두 선택해야 합니다.')),
+      );
+      return;
+    }
 
-  // ✅ 좌석 이름/색라벨 배열 만들기
-  final names = _seats.map((s) => s.name).toList();
-  final labels = _seats.map((s) => s.selected!.label).toList();
+    // ✅ 좌석 이름/색라벨 배열 만들기
+    final names = _seats.map((s) => s.name).toList();
+    final labels = _seats.map((s) => s.selected!.label).toList();
 
-  Navigator.of(context).push(
-    MaterialPageRoute(
-      builder: (_) => LasVegasOrderSelectPage(
-        playerCount: widget.playerCount,
-        botCount: widget.botCount,
-        seatNames: names,
-        selectedColorLabels: labels,
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => LasVegasOrderSelectPage(
+          playerCount: widget.playerCount,
+          botCount: widget.botCount,
+          rounds: widget.rounds, // ✅ 핵심: 판수 전달
+          seatNames: names,
+          selectedColorLabels: labels,
+        ),
       ),
-    ),
-  );
-}
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -192,7 +195,9 @@ class _LasVegasDiceSelectPageState extends State<LasVegasDiceSelectPage> {
     final activeSeat = _seats[_activeHumanIndex];
 
     return Scaffold(
-      appBar: AppBar(title: const Text('LAS VEGAS · 주사위 색 선택')),
+      appBar: AppBar(
+        title: Text('LAS VEGAS · 주사위 색 선택 (R ${widget.rounds}판)'),
+      ),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Row(
@@ -328,15 +333,12 @@ class _LasVegasDiceSelectPageState extends State<LasVegasDiceSelectPage> {
                       crossAxisSpacing: 12,
                       children: _availableColors.map((c) {
                         final pickedBy = _seats.where((s) => s.selected == c).map((s) => s.name).toList();
-                        final isTaken = pickedBy.isNotEmpty;
 
                         final canTap = !_botAnimating &&
                             activeSeat.kind == _SeatKind.human &&
                             (!_isColorTaken(c) || activeSeat.selected == c);
 
                         final isSelectedByActive = activeSeat.selected == c;
-
-                        // 봇 하이라이트(고르는 중인 색)
                         final isBotHighlight = _highlightColor == c;
 
                         return _DiceCubeTile(
@@ -346,7 +348,6 @@ class _LasVegasDiceSelectPageState extends State<LasVegasDiceSelectPage> {
                           isSelected: isSelectedByActive,
                           isBotHighlight: isBotHighlight,
                           onTap: canTap ? () => _selectColorForActiveHuman(c) : null,
-                          // 봇은 사람이 끝나기 전까지 절대 선택 안 함(로직에서 강제)
                         );
                       }).toList(),
                     ),
@@ -470,6 +471,7 @@ class _SeatCard extends StatelessWidget {
   }
 }
 
+// (아래 _DiceCubeTile / _DicePips / _DiceColor 는 너 코드 그대로)
 class _DiceCubeTile extends StatefulWidget {
   final _DiceColor color;
   final List<String> takenBy;
@@ -509,8 +511,6 @@ class _DiceCubeTileState extends State<_DiceCubeTile> with SingleTickerProviderS
   @override
   void didUpdateWidget(covariant _DiceCubeTile oldWidget) {
     super.didUpdateWidget(oldWidget);
-
-    // 선택/봇 하이라이트면 떠있는 느낌 유지
     final shouldLift = widget.isSelected || widget.isBotHighlight;
     if (shouldLift) {
       _c.forward();
@@ -595,12 +595,10 @@ class _DiceCubeTileState extends State<_DiceCubeTile> with SingleTickerProviderS
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // 2.5D 주사위
                         AspectRatio(
                           aspectRatio: 1.15,
                           child: Stack(
                             children: [
-                              // side face (right)
                               Positioned(
                                 right: 4,
                                 top: 10,
@@ -619,7 +617,6 @@ class _DiceCubeTileState extends State<_DiceCubeTile> with SingleTickerProviderS
                                   ),
                                 ),
                               ),
-                              // top face
                               Positioned(
                                 left: 10,
                                 right: 14,
@@ -638,7 +635,6 @@ class _DiceCubeTileState extends State<_DiceCubeTile> with SingleTickerProviderS
                                   ),
                                 ),
                               ),
-                              // front face
                               Positioned(
                                 left: 4,
                                 right: 16,
@@ -663,7 +659,6 @@ class _DiceCubeTileState extends State<_DiceCubeTile> with SingleTickerProviderS
                                   ),
                                 ),
                               ),
-
                               if (showRing)
                                 Positioned.fill(
                                   child: IgnorePointer(
@@ -684,11 +679,9 @@ class _DiceCubeTileState extends State<_DiceCubeTile> with SingleTickerProviderS
                             ],
                           ),
                         ),
-
                         const SizedBox(height: 10),
                         Text(widget.color.label, style: const TextStyle(fontWeight: FontWeight.w900)),
                         const SizedBox(height: 6),
-
                         if (!isTaken)
                           Text(
                             '선택 가능',

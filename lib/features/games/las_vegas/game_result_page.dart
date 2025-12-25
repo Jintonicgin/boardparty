@@ -86,6 +86,17 @@ class GameResultPage extends StatefulWidget {
     required this.playerCount,
     required this.botCount,
     required this.myPlayerIndex,
+
+    // ✅ 다시하기 시 “원래 설정 그대로” 재구동을 위해 추가
+    required this.rounds,
+    required this.turnOrder,
+    required this.seatNames,
+    required this.selectedColorLabels,
+
+    // ✅ 결과/재시작시 필요하면 함께 넘김 (MVP 유지)
+    this.isSolo = true,
+    this.stake = 0,
+    this.roomCode = 'LOCAL',
   });
 
   final GameResultSummary summary;
@@ -96,6 +107,16 @@ class GameResultPage extends StatefulWidget {
   final int playerCount;
   final int botCount;
   final int myPlayerIndex;
+
+  // ✅ restart payload
+  final int rounds;
+  final List<int> turnOrder;
+  final List<String> seatNames;
+  final List<String> selectedColorLabels;
+
+  final bool isSolo;
+  final int stake;
+  final String roomCode;
 
   @override
   State<GameResultPage> createState() => _GameResultPageState();
@@ -113,6 +134,7 @@ class _GameResultPageState extends State<GameResultPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('오류: $e')));
     } finally {
+      // ✅ Navigator로 화면이 바뀐 뒤에도 안전하게 처리
       if (!mounted) return;
       setState(() => _busy = false);
     }
@@ -125,13 +147,24 @@ class _GameResultPageState extends State<GameResultPage> {
           playerCount: widget.playerCount,
           botCount: widget.botCount,
           myPlayerIndex: widget.myPlayerIndex,
+
+          // ✅ 라운드/순서/이름/색 유지
+          rounds: widget.rounds,
+          turnOrder: widget.turnOrder,
+          seatNames: widget.seatNames,
+          selectedColorLabels: widget.selectedColorLabels,
+
+          // ✅ 기타 정보도 유지 (필요하면 인게임/결과에서 사용)
+          isSolo: widget.isSolo,
+          stake: widget.stake,
+          roomCode: widget.roomCode,
         ),
       ),
     );
   }
 
   Future<void> _exitToGameMode() async {
-    // ✅ 스택 꼬임 방지: 결과 화면에서 바로 "모드 선택"으로 갈아타기
+    // ✅ 결과 화면에서 "모드 선택"으로 완전 갈아타기 (스택 완전 정리)
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(
         builder: (_) => GameModePage(
@@ -139,7 +172,7 @@ class _GameResultPageState extends State<GameResultPage> {
           title: widget.gameTitle,
         ),
       ),
-      (route) => route.isFirst,
+      (route) => false, // ✅ 핵심 수정: 이전 스택 전부 제거
     );
   }
 
@@ -245,7 +278,6 @@ class _LeftPanel extends StatelessWidget {
             const SizedBox(height: 12),
             const Divider(height: 1),
             const SizedBox(height: 12),
-
             Expanded(
               child: summary.hasLeaderboard
                   ? ListView.separated(
@@ -277,9 +309,7 @@ class _LeftPanel extends StatelessWidget {
                       ),
                     ),
             ),
-
             const SizedBox(height: 12),
-
             if (summary.highlight1 != null || summary.highlight2 != null || summary.highlight3 != null)
               _HighlightsBox(h1: summary.highlight1, h2: summary.highlight2, h3: summary.highlight3),
           ],
@@ -339,7 +369,11 @@ class _RankRow extends StatelessWidget {
             child: Row(
               children: [
                 Flexible(
-                  child: Text(name, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w900)),
+                  child: Text(
+                    name,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontWeight: FontWeight.w900),
+                  ),
                 ),
                 const SizedBox(width: 8),
                 _Pill(
@@ -383,7 +417,10 @@ class _HighlightsBox extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final items = [h1, h2, h3].where((e) => e != null && e!.trim().isNotEmpty).map((e) => e!).toList();
+    final items = [h1, h2, h3]
+        .where((e) => e != null && e!.trim().isNotEmpty)
+        .map((e) => e!)
+        .toList();
     if (items.isEmpty) return const SizedBox.shrink();
 
     return Card(

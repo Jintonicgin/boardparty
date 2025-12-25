@@ -11,22 +11,30 @@ class LasVegasPlayPage extends StatefulWidget {
     this.botCount = 0,
     this.myPlayerIndex = 0,
 
-    // ✅ 결과 페이지로 넘길 때 필요(없으면 기본값)
+    // ✅ result routing info
     this.isSolo = true,
     this.stake = 0,
-    this.rounds = 1, // MVP: 1라운드만
+    required this.rounds, // ✅ DiceSelect/OrderSelect에서 넘김
     this.roomCode = 'LOCAL',
+
+    // ✅ 순서/표시 정보 (OrderSelect에서 넘어옴)
+    required this.turnOrder, // rank -> seatIndex
+    required this.seatNames, // seatIndex -> name
+    required this.selectedColorLabels, // seatIndex -> "RED"
   });
 
   final int playerCount;
-  final int botCount; // 뒤쪽부터 botCount명은 BOT
+  final int botCount;
   final int myPlayerIndex;
 
-  // ✅ result routing info
   final bool isSolo;
   final int stake;
   final int rounds;
   final String roomCode;
+
+  final List<int> turnOrder;
+  final List<String> seatNames;
+  final List<String> selectedColorLabels;
 
   @override
   State<LasVegasPlayPage> createState() => _LasVegasPlayPageState();
@@ -42,14 +50,23 @@ class _LasVegasPlayPageState extends State<LasVegasPlayPage>
   late List<int> _dice; // 확정 값
   late List<int> _displayDice; // 굴림 중 표시 값
 
-  // ✅ 라운드 동안 플레이어별 남은 주사위 개수(라스베가스 룰 느낌)
+  // ✅ 라운드 동안 플레이어별 남은 주사위 개수
   late List<int> _remainingDiceCountByPlayer;
+
+  // ✅ 여러 라운드 누적 점수(돈)
+  late List<int> _totalMoneyBySeat;
+
+  // ✅ 라운드 진행
+  int _roundIndex = 1; // 1..rounds
+
+  // ✅ turnOrder 기반 턴 포지션 (0..playerCount-1)
+  int _turnPos = 0;
 
   // 선택 상태(사람 턴)
   final Set<int> _selectedIndices = {};
   int? _lockedValue;
 
-  // 턴/플레이어
+  // 턴/플레이어(= seatIndex)
   late int _currentPlayer;
   late int _humanCount;
 
@@ -63,8 +80,7 @@ class _LasVegasPlayPageState extends State<LasVegasPlayPage>
   late final List<List<int>> _casinoMoney; // casinoMoney[casinoValue] = cards list
 
   // Fly 애니메이션: 위치 측정 key
-  final List<GlobalKey> _casinoKeys =
-      List.generate(7, (_) => GlobalKey()); // 1..6 사용
+  final List<GlobalKey> _casinoKeys = List.generate(7, (_) => GlobalKey()); // 1..6 사용
   late List<GlobalKey> _dieKeys;
 
   // Roll 애니메이션: 타이머
@@ -86,10 +102,16 @@ class _LasVegasPlayPageState extends State<LasVegasPlayPage>
     _casinos = List.generate(7, (_) => List.filled(count, 0));
     _casinoMoney = List.generate(7, (_) => <int>[]);
 
-    _currentPlayer = 0;
+    // ✅ 누적 점수 초기화
+    _totalMoneyBySeat = List<int>.filled(widget.playerCount, 0);
+
+    // ✅ 라운드 시작
+    _roundIndex = 1;
+    _turnPos = 0;
+    _currentPlayer = widget.turnOrder[_turnPos];
 
     _resetRound();
-    _startTurn(playerIndex: 0);
+    _startTurn(playerIndex: _currentPlayer);
   }
 
   @override
@@ -148,14 +170,50 @@ class _LasVegasPlayPageState extends State<LasVegasPlayPage>
   }
 
   // ===== Game end check =====
-  bool get _allPlayersOutOfDice =>
-      _remainingDiceCountByPlayer.every((x) => x <= 0);
+  bool get _allPlayersOutOfDice => _remainingDiceCountByPlayer.every((x) => x <= 0);
+
+  /// ✅ 라운드 종료 처리:
+  /// - 이번 라운드 점수 계산 후 누적
+  /// - 마지막 라운드면 결과로
+  /// - 아니면 다음 라운드 시작 (turnOrder 유지, _turnPos=0부터)
+  Future<void> _handleRoundEnd() async {
+    // 이번 라운드 점수
+    final roundScores = _computeScores(); // seatIndex -> score(money)
+
+    // 누적
+    for (int i = 0; i < widget.playerCount; i++) {
+      _totalMoneyBySeat[i] += roundScores[i];
+    }
+
+    final isLastRound = _roundIndex >= widget.rounds;
+
+    if (!isLastRound) {
+      // ✅ 다음 라운드로
+      setState(() {
+        _roundIndex += 1;
+        _turnPos = 0;
+        _currentPlayer = widget.turnOrder[_turnPos];
+        _phase = _TurnPhase.betweenTurns;
+        _botStatus = '라운드 ${_roundIndex - 1} 종료 → 다음 라운드 시작…';
+      });
+
+      await Future<void>.delayed(const Duration(milliseconds: 650));
+      if (!mounted) return;
+
+      _resetRound();
+      _startTurn(playerIndex: _currentPlayer);
+      return;
+    }
+
+    // ✅ 최종 결과로
+    await _finishGameAndGoResult();
+  }
 
   Future<void> _finishGameAndGoResult() async {
     if (_finished) return;
     _finished = true;
 
-    final scores = _computeScores(); // seatIndex -> score(money)
+    // ✅ 최종 점수는 누적 점수
     final leaderboard = <PlayerResult>[];
 
     for (int i = 0; i < widget.playerCount; i++) {
@@ -163,15 +221,16 @@ class _LasVegasPlayPageState extends State<LasVegasPlayPage>
       leaderboard.add(
         PlayerResult(
           seatIndex: i,
-          name: isBot ? 'BOT ${i - _humanCount + 1}' : (i == 0 ? 'Me' : 'P${i + 1}'),
-          role: isBot ? SeatRole.bot : SeatRole.core, // MVP: 사람=core로 취급
-          score: scores[i],
+          name: (i >= 0 && i < widget.seatNames.length)
+              ? widget.seatNames[i]
+              : (isBot ? 'BOT ${i - _humanCount + 1}' : (i == 0 ? 'Me' : 'P${i + 1}')),
+          role: isBot ? SeatRole.bot : SeatRole.core,
+          score: _totalMoneyBySeat[i],
           deltaCoins: 0,
         ),
       );
     }
 
-    // 점수 내림차순 정렬
     leaderboard.sort((a, b) => b.score.compareTo(a.score));
 
     final my = leaderboard.firstWhere(
@@ -183,9 +242,9 @@ class _LasVegasPlayPageState extends State<LasVegasPlayPage>
       gameTitle: 'LAS VEGAS',
       mySeatIndex: widget.myPlayerIndex,
       leaderboardSorted: leaderboard,
-      rewardCoins: max(0, my.score ~/ 1000), // MVP: 돈/1000을 코인처럼
+      rewardCoins: max(0, my.score ~/ 1000),
       rewardExp: 0,
-      highlight1: '라운드 종료: 모든 플레이어 주사위 소진',
+      highlight1: '게임 종료: ${widget.rounds}판 완료',
       highlight2: 'MVP 규칙: 카지노별 최다 단독 1등만 돈 획득',
       highlight3: '동률(최다 동점)은 해당 카지노 무효 처리',
     );
@@ -200,6 +259,15 @@ class _LasVegasPlayPageState extends State<LasVegasPlayPage>
           playerCount: widget.playerCount,
           botCount: widget.botCount,
           myPlayerIndex: widget.myPlayerIndex,
+
+          // ✅ 결과/재시작용 payload
+          rounds: widget.rounds,
+          turnOrder: widget.turnOrder,
+          seatNames: widget.seatNames,
+          selectedColorLabels: widget.selectedColorLabels,
+          isSolo: widget.isSolo,
+          stake: widget.stake,
+          roomCode: widget.roomCode,
         ),
       ),
     );
@@ -212,20 +280,17 @@ class _LasVegasPlayPageState extends State<LasVegasPlayPage>
     final scores = List<int>.filled(widget.playerCount, 0);
 
     for (int c = 1; c <= 6; c++) {
-      final stacks = _casinos[c]; // player별 쌓인 주사위
+      final stacks = _casinos[c];
       int best = 0;
       for (final v in stacks) {
         if (v > best) best = v;
       }
       if (best == 0) continue;
 
-      // best 가진 사람들
       final winners = <int>[];
       for (int p = 0; p < stacks.length; p++) {
         if (stacks[p] == best) winners.add(p);
       }
-
-      // 동률이면 무효
       if (winners.length != 1) continue;
 
       final winP = winners.first;
@@ -244,7 +309,6 @@ class _LasVegasPlayPageState extends State<LasVegasPlayPage>
     _selectedIndices.clear();
     _lockedValue = null;
 
-    // ✅ 여기서 “무조건 8개” 만들지 말고, 라운드에서 남은 개수를 가져옴
     final remain = _remainingDiceCountByPlayer[_currentPlayer].clamp(0, 8);
 
     _dice = List<int>.filled(remain, 1);
@@ -255,7 +319,6 @@ class _LasVegasPlayPageState extends State<LasVegasPlayPage>
 
     setState(() {});
 
-    // ✅ 남은 주사위 0이면 턴 스킵
     if (remain == 0) {
       Future.delayed(const Duration(milliseconds: 250), () {
         if (!mounted) return;
@@ -264,7 +327,6 @@ class _LasVegasPlayPageState extends State<LasVegasPlayPage>
       return;
     }
 
-    // BOT 턴이면 자동 진행
     if (_isBotTurn) {
       _runBotTurn();
     }
@@ -273,21 +335,24 @@ class _LasVegasPlayPageState extends State<LasVegasPlayPage>
   void _endTurnAndNext() {
     if (_finished) return;
 
-    // ✅ 종료 체크: 전원 주사위 0이면 결과로
+    // ✅ 라운드 종료 체크
     if (_allPlayersOutOfDice) {
-      _finishGameAndGoResult();
+      _handleRoundEnd();
       return;
     }
 
-    final next = (_currentPlayer + 1) % widget.playerCount;
+    // ✅ turnOrder 기반 다음 턴
+    final nextPos = (_turnPos + 1) % widget.playerCount;
+    final nextSeat = widget.turnOrder[nextPos];
 
     setState(() {
       _phase = _TurnPhase.betweenTurns;
+      _turnPos = nextPos;
     });
 
     Future.delayed(const Duration(milliseconds: 420), () {
       if (!mounted) return;
-      _startTurn(playerIndex: next);
+      _startTurn(playerIndex: nextSeat);
     });
   }
 
@@ -295,7 +360,6 @@ class _LasVegasPlayPageState extends State<LasVegasPlayPage>
   Future<void> _rollDiceAnimated({required String whoLabel}) async {
     if (_phase == _TurnPhase.rolling) return;
 
-    // ✅ 남은 주사위 0개면 굴릴 수 없음 → 턴 종료
     if (_dice.isEmpty) {
       setState(() {
         _botStatus = '$whoLabel 주사위가 남아있지 않아요.';
@@ -365,7 +429,9 @@ class _LasVegasPlayPageState extends State<LasVegasPlayPage>
 
   // ===== BOT turn =====
   Future<void> _runBotTurn() async {
-    final who = 'BOT ${_currentPlayer - _humanCount + 1}';
+    final who = (widget.seatNames.isNotEmpty && _currentPlayer < widget.seatNames.length)
+        ? widget.seatNames[_currentPlayer]
+        : 'BOT ${_currentPlayer - _humanCount + 1}';
 
     await _rollDiceAnimated(whoLabel: who);
     if (!mounted) return;
@@ -387,7 +453,6 @@ class _LasVegasPlayPageState extends State<LasVegasPlayPage>
       if (counts[v] > counts[best]) best = v;
     }
 
-    // tie-break: 돈 합계 큰 카지노 선호
     final bestCandidates = <int>[];
     final maxCnt = counts[best];
     for (int v = 1; v <= 6; v++) {
@@ -460,7 +525,6 @@ class _LasVegasPlayPageState extends State<LasVegasPlayPage>
       }
       _displayDice = List.of(_dice);
 
-      // ✅ “라운드 단위 남은 주사위” 저장 (이게 핵심)
       _remainingDiceCountByPlayer[_currentPlayer] = _dice.length;
 
       _selectedIndices.clear();
@@ -480,8 +544,7 @@ class _LasVegasPlayPageState extends State<LasVegasPlayPage>
     return Rect.fromLTWH(topLeft.dx, topLeft.dy, box.size.width, box.size.height);
   }
 
-  Future<void> _playFlyAnimation(
-      OverlayState overlay, List<_FlyItem> items, Rect targetRect) async {
+  Future<void> _playFlyAnimation(OverlayState overlay, List<_FlyItem> items, Rect targetRect) async {
     final futures = <Future<void>>[];
     for (int i = 0; i < items.length; i++) {
       futures.add(_flyOne(overlay, items[i], targetRect, delayMs: i * 55));
@@ -489,8 +552,7 @@ class _LasVegasPlayPageState extends State<LasVegasPlayPage>
     await Future.wait(futures);
   }
 
-  Future<void> _flyOne(OverlayState overlay, _FlyItem item, Rect targetRect,
-      {required int delayMs}) async {
+  Future<void> _flyOne(OverlayState overlay, _FlyItem item, Rect targetRect, {required int delayMs}) async {
     if (delayMs > 0) await Future<void>.delayed(Duration(milliseconds: delayMs));
 
     final c = AnimationController(vsync: this, duration: const Duration(milliseconds: 520));
@@ -548,23 +610,26 @@ class _LasVegasPlayPageState extends State<LasVegasPlayPage>
   Widget build(BuildContext context) {
     _dieKeys = List.generate(_displayDice.length, (_) => GlobalKey());
 
-    final title = _isBotTurn
-        ? 'BOT ${_currentPlayer - _humanCount + 1} 턴'
-        : (_currentPlayer == widget.myPlayerIndex ? '내 턴' : 'Player ${_currentPlayer + 1} 턴');
+    final currentName = (_currentPlayer >= 0 && _currentPlayer < widget.seatNames.length)
+        ? widget.seatNames[_currentPlayer]
+        : (_currentPlayer >= _humanCount ? 'BOT ${_currentPlayer - _humanCount + 1}' : 'P${_currentPlayer + 1}');
 
+    final title = '${currentName} 턴';
     final highlightCasino = _targetCasino;
     final previewAdd = _selectedCount;
-
     final remainForCurrent = _remainingDiceCountByPlayer[_currentPlayer];
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('LAS VEGAS · 인게임 MVP ($title)'),
+        title: Text('LAS VEGAS · 인게임 MVP (라운드 $_roundIndex/${widget.rounds}) · $title'),
         actions: [
           TextButton(
             onPressed: () {
+              // 디버그용: 현재 라운드만 리셋
               _resetRound();
-              _startTurn(playerIndex: 0);
+              _turnPos = 0;
+              _currentPlayer = widget.turnOrder[_turnPos];
+              _startTurn(playerIndex: _currentPlayer);
             },
             child: const Text('라운드 리셋(임시)', style: TextStyle(color: Colors.white)),
           ),
@@ -622,7 +687,7 @@ class _LasVegasPlayPageState extends State<LasVegasPlayPage>
                         width: double.infinity,
                         child: FilledButton(
                           onPressed: _phase == _TurnPhase.waitingRoll
-                              ? () => _rollDiceAnimated(whoLabel: 'Me')
+                              ? () => _rollDiceAnimated(whoLabel: currentName)
                               : null,
                           child: const Padding(
                             padding: EdgeInsets.symmetric(vertical: 14),
@@ -635,7 +700,7 @@ class _LasVegasPlayPageState extends State<LasVegasPlayPage>
                         width: double.infinity,
                         child: FilledButton(
                           onPressed: (_phase == _TurnPhase.selecting && _selectedCount > 0)
-                              ? () => _commitSelectedToCasinoWithFly(committerLabel: 'Me')
+                              ? () => _commitSelectedToCasinoWithFly(committerLabel: currentName)
                               : null,
                           child: Padding(
                             padding: const EdgeInsets.symmetric(vertical: 14),
@@ -739,8 +804,7 @@ class _StatusCard extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 10),
-            Text('남은 $remainingDice',
-                style: const TextStyle(fontWeight: FontWeight.w900)),
+            Text('남은 $remainingDice', style: const TextStyle(fontWeight: FontWeight.w900)),
           ],
         ),
       ),
@@ -1017,8 +1081,7 @@ class _CasinoCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              Text('카지노 $casinoValue',
-                  style: const TextStyle(fontWeight: FontWeight.w900)),
+              Text('카지노 $casinoValue', style: const TextStyle(fontWeight: FontWeight.w900)),
               const Spacer(),
               if (highlight && previewAddCount > 0)
                 _Pill(text: '+$previewAddCount', color: ring.withOpacity(0.14)),
@@ -1103,8 +1166,7 @@ class _MoneyStack extends StatelessWidget {
             ),
           ),
           const Spacer(),
-          Text('합계 $sumLabel',
-              style: const TextStyle(fontWeight: FontWeight.w900)),
+          Text('합계 $sumLabel', style: const TextStyle(fontWeight: FontWeight.w900)),
         ],
       ),
     );
@@ -1133,8 +1195,7 @@ class _MoneyCardMini extends StatelessWidget {
           ),
         ],
       ),
-      child: Text(label,
-          style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12)),
+      child: Text(label, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12)),
     );
   }
 }
@@ -1153,8 +1214,7 @@ class _Pill extends StatelessWidget {
         color: color,
         border: Border.all(color: Theme.of(context).colorScheme.outline),
       ),
-      child: Text(text,
-          style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12)),
+      child: Text(text, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12)),
     );
   }
 }
@@ -1189,8 +1249,7 @@ class _FlyDieBubble extends StatelessWidget {
             ),
           ],
         ),
-        child: Text('$value',
-            style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
+        child: Text('$value', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
       ),
     );
   }

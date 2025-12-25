@@ -1,19 +1,24 @@
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
-import 'las_vegas_play_page.dart'; // ✅ 너가 만든 인게임 페이지 파일로 import 경로 맞춰줘
+import 'las_vegas_play_page.dart'; // ✅ 실제 경로로 맞추기
 
 class LasVegasOrderSelectPage extends StatefulWidget {
   const LasVegasOrderSelectPage({
     super.key,
     required this.playerCount,
     required this.botCount,
+    required this.rounds, // ✅ 추가
     required this.seatNames,
     required this.selectedColorLabels, // seatIndex -> "RED" 같은 라벨(표시용)
   });
 
   final int playerCount;
   final int botCount;
+
+  /// ✅ 판수(라운드 수)
+  final int rounds;
+
   final List<String> seatNames;
   final List<String> selectedColorLabels;
 
@@ -24,6 +29,8 @@ class LasVegasOrderSelectPage extends StatefulWidget {
 class _LasVegasOrderSelectPageState extends State<LasVegasOrderSelectPage> {
   final _rng = Random();
   bool _rolling = false;
+
+  /// _order[rank] = seatIndex
   List<int> _order = [];
 
   @override
@@ -50,6 +57,8 @@ class _LasVegasOrderSelectPageState extends State<LasVegasOrderSelectPage> {
   }
 
   void _goNext() {
+    if (_rolling) return;
+
     // MVP: 내 플레이어 index는 0("Me")로 가정
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(
@@ -57,6 +66,14 @@ class _LasVegasOrderSelectPageState extends State<LasVegasOrderSelectPage> {
           playerCount: widget.playerCount,
           botCount: widget.botCount,
           myPlayerIndex: 0,
+
+          // ✅ 핵심: 판수/턴순서 전달
+          rounds: widget.rounds,
+          turnOrder: List<int>.from(_order),
+
+          // ✅ (선택) 결과 화면/표시용으로 이름/색도 같이 넘겨두면 편함
+          seatNames: List<String>.from(widget.seatNames),
+          selectedColorLabels: List<String>.from(widget.selectedColorLabels),
         ),
       ),
     );
@@ -67,7 +84,7 @@ class _LasVegasOrderSelectPageState extends State<LasVegasOrderSelectPage> {
     final canNext = !_rolling;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('LAS VEGAS · 순서 정하기')),
+      appBar: AppBar(title: Text('LAS VEGAS · 순서 정하기 (R ${widget.rounds}판)')),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Row(
@@ -151,7 +168,7 @@ class _LasVegasOrderSelectPageState extends State<LasVegasOrderSelectPage> {
                         '• 지금은 UI 흐름 연결을 위해 로컬에서 랜덤 셔플합니다.',
                         style: TextStyle(
                           color: Theme.of(context).colorScheme.onSurfaceVariant,
-                          fontWeight: FontWeight.w600, // ✅ FIX: w650 -> w600
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ],
