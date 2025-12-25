@@ -28,7 +28,8 @@ class RoomLobbyPage extends StatefulWidget {
 }
 
 class _RoomLobbyPageState extends State<RoomLobbyPage> {
-  late final String roomCode;
+  // ✅ 혼자하기는 방코드 필요 없음 → nullable
+  String? roomCode;
 
   late int _players;
   late int _stake;
@@ -63,7 +64,8 @@ class _RoomLobbyPageState extends State<RoomLobbyPage> {
   void initState() {
     super.initState();
 
-    roomCode = _genCode();
+    // ✅ 방코드는 "혼자하기"가 아닐 때만 생성
+    roomCode = widget.isSolo ? null : _genCode();
 
     _players = widget.players.clamp(_minPlayers, _maxPlayers);
     _stake = widget.stake;
@@ -73,6 +75,12 @@ class _RoomLobbyPageState extends State<RoomLobbyPage> {
     seats[0] = _Seat.human(name: 'Me (Host)', ready: true);
 
     if (widget.isSolo) {
+      // ✅ 혼자하기 기본: 2명(나 + 봇1) 보장
+      if (_players < 2) _players = 2;
+
+      // seats 길이 보정
+      seats = List.generate(_players, (_) => _Seat.empty());
+      seats[0] = _Seat.human(name: 'Me (Host)', ready: true);
       for (int i = 1; i < seats.length; i++) {
         seats[i] = _Seat.bot(level: BotLevel.mid);
       }
@@ -85,7 +93,7 @@ class _RoomLobbyPageState extends State<RoomLobbyPage> {
         MaterialPageRoute(
           builder: (_) => LasVegasDiceSelectPage(
             playerCount: _players,
-            botCount: widget.isSolo ? _players - 1 : 0,
+            botCount: widget.isSolo ? (_players - 1) : 0,
           ),
         ),
       );
@@ -112,8 +120,8 @@ class _RoomLobbyPageState extends State<RoomLobbyPage> {
         builder: (_) => MatchmakingPage(
           gameId: widget.gameId,
           gameTitle: widget.gameTitle,
-          partySize: _humanCount,   // 현재 방에 있는 사람 수(코어 멤버)
-          targetPlayers: _players,  // 목표 총 인원
+          partySize: _humanCount,
+          targetPlayers: _players,
         ),
       ),
     );
@@ -121,14 +129,44 @@ class _RoomLobbyPageState extends State<RoomLobbyPage> {
     if (!mounted || result == null) return;
     if (!result.matched) return;
 
-    // ✅ “용병이 우리 방으로 들어오는” 연출은 하지 않고,
-    //    매칭이 완료되면 바로 시작하는 흐름(MVP)
-    //    (원하면 여기서 바로 _startGame() 호출하면 됨)
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('매칭 성공! 용병 ${result.filledPlayers}명 확보 → 게임 시작')),
     );
 
     _startGame();
+  }
+
+  // =========================
+  // ✅ SOLO: 봇 추가/제거로 인원(2~8) 조절
+  // =========================
+  void _soloAddBot() {
+    if (!widget.isSolo) return;
+    if (_players >= _maxPlayers) return;
+
+    setState(() {
+      _players += 1;
+      seats = List.of(seats)..add(_Seat.bot(level: BotLevel.mid));
+    });
+  }
+
+  void _soloRemoveBot() {
+    if (!widget.isSolo) return;
+    if (_players <= _minPlayers) return;
+
+    // 마지막 좌석이 봇일 때만 제거(안전)
+    if (seats.length <= 1) return;
+    final last = seats.last;
+    if (last.type != _SeatType.bot) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('마지막 좌석이 봇일 때만 제거할 수 있어요.')),
+      );
+      return;
+    }
+
+    setState(() {
+      seats = List.of(seats)..removeLast();
+      _players -= 1;
+    });
   }
 
   String _botLevelLabel(BotLevel l) {
@@ -177,21 +215,22 @@ class _RoomLobbyPageState extends State<RoomLobbyPage> {
 
           const SizedBox(height: 12),
 
-          // 방 코드
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(14),
-              child: Row(
-                children: [
-                  const Icon(Icons.key),
-                  const SizedBox(width: 8),
-                  Text(roomCode, style: const TextStyle(fontWeight: FontWeight.w900)),
-                ],
+          // ✅ 방 코드는 "방 만들기(온라인)"에서만 노출. 혼자하기는 숨김.
+          if (!widget.isSolo) ...[
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(14),
+                child: Row(
+                  children: [
+                    const Icon(Icons.key),
+                    const SizedBox(width: 8),
+                    Text(roomCode ?? '-', style: const TextStyle(fontWeight: FontWeight.w900)),
+                  ],
+                ),
               ),
             ),
-          ),
-
-          const SizedBox(height: 12),
+            const SizedBox(height: 12),
+          ],
 
           // 방 옵션
           Card(
@@ -221,7 +260,35 @@ class _RoomLobbyPageState extends State<RoomLobbyPage> {
             ),
           ),
 
-          const SizedBox(height: 14),
+          const SizedBox(height: 12),
+
+          // ✅ 혼자하기: 인원(=봇) 조절 UI 추가
+          if (widget.isSolo && !_isTichu) ...[
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(14),
+                child: Row(
+                  children: [
+                    const Expanded(
+                      child: Text('혼자하기 인원 조절', style: TextStyle(fontWeight: FontWeight.w900)),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: (_players > _minPlayers) ? _soloRemoveBot : null,
+                      icon: const Icon(Icons.remove),
+                      label: const Text('봇 제거'),
+                    ),
+                    const SizedBox(width: 10),
+                    FilledButton.icon(
+                      onPressed: (_players < _maxPlayers) ? _soloAddBot : null,
+                      icon: const Icon(Icons.add),
+                      label: const Text('봇 추가'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+          ],
 
           const Text(
             '플레이어',
@@ -234,15 +301,16 @@ class _RoomLobbyPageState extends State<RoomLobbyPage> {
             (i) => _SeatTile(
               index: i,
               seat: seats[i],
+              // ✅ 혼자하기는 킥 개념이 “봇 제거”로 위에서 처리 → 여기선 킥 버튼 안 씀
               canKick: !widget.isSolo && i != 0,
               canEditBotLevel: seats[i].type == _SeatType.bot,
               botLevelLabel: _botLevelLabel,
               onAddBot: () {
+                // 온라인 방에서만 빈자리에 봇 추가(요구사항 유지)
                 if (widget.isSolo) return;
                 if (i == 0) return;
 
                 setState(() {
-                  // 이미 봇이면 무시(원하면 토글로 바꿔도 됨)
                   seats[i] = _Seat.bot(level: seats[i].botLevel ?? BotLevel.mid);
                 });
               },
@@ -269,7 +337,6 @@ class _RoomLobbyPageState extends State<RoomLobbyPage> {
           const SizedBox(height: 18),
 
           if (!widget.isSolo) ...[
-            // ✅ 봇이 하나라도 있으면 빠대 매칭 숨김(요구사항)
             if (!_hasBot)
               FilledButton(
                 onPressed: _startMatchmaking,
@@ -283,7 +350,8 @@ class _RoomLobbyPageState extends State<RoomLobbyPage> {
             ),
           ] else
             FilledButton(
-              onPressed: _startGame,
+              // ✅ 혼자하기는 _players가 실제 플레이 인원. 최소 2명 보장됨.
+              onPressed: _players >= 2 ? _startGame : null,
               child: const Text('바로 시작'),
             ),
         ],
@@ -306,7 +374,6 @@ class _RoomLobbyPageState extends State<RoomLobbyPage> {
             constraints: const BoxConstraints(maxWidth: 600, maxHeight: 700),
             child: Column(
               children: [
-                // 헤더
                 Container(
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
@@ -342,14 +409,12 @@ class _RoomLobbyPageState extends State<RoomLobbyPage> {
                     ],
                   ),
                 ),
-                // 내용
                 Expanded(
                   child: SingleChildScrollView(
                     padding: const EdgeInsets.all(20),
                     child: _buildGameRuleContent(),
                   ),
                 ),
-                // 하단 버튼
                 Padding(
                   padding: const EdgeInsets.all(16),
                   child: SizedBox(
@@ -397,53 +462,6 @@ class _RoomLobbyPageState extends State<RoomLobbyPage> {
             iconColor: Color(0xFFF59E0B),
             title: '진행',
             content: '플레이는 주사위를 굴리고 → 한 숫자를 선택해 → 해당 카지노에 배치를 반복합니다.\n\n모든 주사위를 다 놓으면 라운드가 끝납니다.',
-            subsections: [
-              _RuleSubsection(
-                subtitle: '내 턴에 하는 일',
-                items: [
-                  '아직 손에 남아있는 내 주사위 전부를 굴립니다.',
-                  '나온 눈 (1~6) 중 하나를 선택합니다.',
-                  '선택한 눈과 같은 값이 나온 주사위를 전부 해당 번호 카지노에 한꺼번에 배치합니다.',
-                  '남은 주사위는 다음 턴에 다시 굴립니다.',
-                  '다음 플레이어로 턴이 넘어갑니다.',
-                ],
-              ),
-            ],
-          ),
-          SizedBox(height: 16),
-          _RuleCard(
-            icon: Icons.calculate,
-            iconColor: Color(0xFF8B5CF6),
-            title: '라운드 종료 정산',
-            content: '각 카지노 (1~6번) 마다 주사위 개수로 순위를 매겨 상금을 가져갑니다.',
-            subsections: [
-              _RuleSubsection(
-                subtitle: '핵심 규칙: 동점은 전부 무효',
-                isHighlight: true,
-                items: [
-                  '어떤 카지노에서 같은 개수로 묶인 플레이어들은 그 순위에서 모두 탈락합니다.',
-                  '보통 1등 동점이 가장 중요합니다.',
-                ],
-              ),
-              _RuleSubsection(
-                subtitle: '예시',
-                example: '3번 카지노에 A=4개, B=4개, C=2개라면\n\n• A와 B는 1등 동점 → 둘 다 무효\n• 남은 사람 중 C가 최다 → C가 1등으로 상금을 가져감',
-              ),
-              _RuleSubsection(
-                subtitle: '상금 배분',
-                items: [
-                  '각 카지노의 돈 카드는 보통 큰 금액부터 지급됩니다.',
-                  '1등이 가장 큰 카드, 2등이 다음 카드… 순으로 가져갑니다.',
-                ],
-              ),
-            ],
-          ),
-          SizedBox(height: 16),
-          _RuleCard(
-            icon: Icons.replay,
-            iconColor: Color(0xFF60A5FA),
-            title: '다음 라운드',
-            content: '모든 카지노 상금을 정산한 뒤, 다음 라운드에서 다시 각 카지노에 상금을 공개 배치하고 같은 방식으로 진행합니다.',
           ),
           SizedBox(height: 16),
           _RuleCard(
@@ -456,7 +474,6 @@ class _RoomLobbyPageState extends State<RoomLobbyPage> {
       );
     }
 
-    // 다른 게임들은 준비 중
     return const Text('게임 룰이 준비 중입니다.');
   }
 }
@@ -479,8 +496,7 @@ class _Seat {
     this.botLevel,
   });
 
-  factory _Seat.empty() =>
-      const _Seat(type: _SeatType.empty, name: '빈 자리', ready: false);
+  factory _Seat.empty() => const _Seat(type: _SeatType.empty, name: '빈 자리', ready: false);
 
   factory _Seat.human({required String name, required bool ready}) =>
       _Seat(type: _SeatType.human, name: name, ready: ready);
@@ -506,7 +522,6 @@ class _RuleCard extends StatelessWidget {
   final String title;
   final String? content;
   final List<String>? items;
-  final List<_RuleSubsection>? subsections;
 
   const _RuleCard({
     required this.icon,
@@ -514,7 +529,6 @@ class _RuleCard extends StatelessWidget {
     required this.title,
     this.content,
     this.items,
-    this.subsections,
   });
 
   @override
@@ -529,7 +543,6 @@ class _RuleCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 헤더
           Row(
             children: [
               Container(
@@ -544,166 +557,38 @@ class _RuleCard extends StatelessWidget {
               Expanded(
                 child: Text(
                   title,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w900,
-                    fontSize: 16,
-                  ),
+                  style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
                 ),
               ),
             ],
           ),
           const SizedBox(height: 12),
-          // 내용
-          if (content != null) ...[
+          if (content != null)
             Text(
               content!,
-              style: const TextStyle(
-                height: 1.6,
-                fontSize: 14,
-                color: Color(0xFFE5E7EB),
+              style: const TextStyle(height: 1.6, fontSize: 14, color: Color(0xFFE5E7EB)),
+            ),
+          if (items != null) ...[
+            if (content != null) const SizedBox(height: 10),
+            ...items!.map(
+              (item) => Padding(
+                padding: const EdgeInsets.only(bottom: 6, left: 8),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: const [
+                    Text('• ', style: TextStyle(height: 1.6, fontSize: 14, color: Color(0xFF9CA3AF))),
+                  ]..followedBy([
+                      Expanded(
+                        child: Text(
+                          item,
+                          style: const TextStyle(height: 1.6, fontSize: 14, color: Color(0xFFE5E7EB)),
+                        ),
+                      ),
+                    ]).toList(),
+                ),
               ),
             ),
-            if (items != null || subsections != null) const SizedBox(height: 8),
           ],
-          if (items != null)
-            ...items!.map((item) => Padding(
-                  padding: const EdgeInsets.only(bottom: 6, left: 8),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        '• ',
-                        style: TextStyle(
-                          height: 1.6,
-                          fontSize: 14,
-                          color: Color(0xFF9CA3AF),
-                        ),
-                      ),
-                      Expanded(
-                        child: Text(
-                          item,
-                          style: const TextStyle(
-                            height: 1.6,
-                            fontSize: 14,
-                            color: Color(0xFFE5E7EB),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                )),
-          if (subsections != null)
-            ...subsections!.asMap().entries.map((entry) {
-              final index = entry.key;
-              final subsection = entry.value;
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (index > 0 || content != null || items != null)
-                    const SizedBox(height: 12),
-                  subsection,
-                ],
-              );
-            }),
-        ],
-      ),
-    );
-  }
-}
-
-class _RuleSubsection extends StatelessWidget {
-  final String subtitle;
-  final String? example;
-  final List<String>? items;
-  final bool isHighlight;
-
-  const _RuleSubsection({
-    required this.subtitle,
-    this.example,
-    this.items,
-    this.isHighlight = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: isHighlight
-          ? BoxDecoration(
-              color: const Color(0xFFEF4444).withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: const Color(0xFFEF4444).withValues(alpha: 0.3)),
-            )
-          : null,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              if (isHighlight)
-                const Icon(
-                  Icons.warning_amber_rounded,
-                  color: Color(0xFFEF4444),
-                  size: 18,
-                ),
-              if (isHighlight) const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  subtitle,
-                  style: TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 13,
-                    color: isHighlight ? const Color(0xFFEF4444) : const Color(0xFF93C5FD),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          if (example != null)
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: const Color(0xFF121E35),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                example!,
-                style: const TextStyle(
-                  height: 1.6,
-                  fontSize: 13,
-                  color: Color(0xFFE5E7EB),
-                  fontFamily: 'monospace',
-                ),
-              ),
-            ),
-          if (items != null)
-            ...items!.map((item) => Padding(
-                  padding: const EdgeInsets.only(bottom: 4, left: 4),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        '• ',
-                        style: TextStyle(
-                          height: 1.6,
-                          fontSize: 13,
-                          color: Color(0xFF9CA3AF),
-                        ),
-                      ),
-                      Expanded(
-                        child: Text(
-                          item,
-                          style: const TextStyle(
-                            height: 1.6,
-                            fontSize: 13,
-                            color: Color(0xFFE5E7EB),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                )),
         ],
       ),
     );
@@ -760,10 +645,7 @@ class _SeatTile extends StatelessWidget {
                 value: seat.botLevel ?? BotLevel.mid,
                 onChanged: (v) => v == null ? null : onBotLevelChanged(v),
                 items: BotLevel.values
-                    .map((e) => DropdownMenuItem(
-                          value: e,
-                          child: Text(botLevelLabel(e)),
-                        ))
+                    .map((e) => DropdownMenuItem(value: e, child: Text(botLevelLabel(e))))
                     .toList(),
               ),
 

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'order_select_page.dart';
 
 class LasVegasDiceSelectPage extends StatefulWidget {
   final int playerCount;
@@ -161,21 +162,29 @@ class _LasVegasDiceSelectPageState extends State<LasVegasDiceSelectPage> {
   }
 
   void _goNext() {
-    if (!_allSelected) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(_anyBots
-              ? '사람이 먼저 모두 선택해야 합니다. (사람 선택 완료 후 봇이 마지막에 선택)'
-              : '아직 모든 플레이어가 선택하지 않았어요.'),
-        ),
-      );
-      return;
-    }
-
+  final done = _seats.every((s) => s.selected != null);
+  if (!done) {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('다음 단계: 순서 정하기 (TODO)')),
+      const SnackBar(content: Text('사람이 먼저 모두 선택해야 합니다.')),
     );
+    return;
   }
+
+  // ✅ 좌석 이름/색라벨 배열 만들기
+  final names = _seats.map((s) => s.name).toList();
+  final labels = _seats.map((s) => s.selected!.label).toList();
+
+  Navigator.of(context).push(
+    MaterialPageRoute(
+      builder: (_) => LasVegasOrderSelectPage(
+        playerCount: widget.playerCount,
+        botCount: widget.botCount,
+        seatNames: names,
+        selectedColorLabels: labels,
+      ),
+    ),
+  );
+}
 
   @override
   Widget build(BuildContext context) {
